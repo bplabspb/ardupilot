@@ -1,10 +1,11 @@
 #include "Copter.h"
+#include "libraries\_bplab\BPLab_Pi_Interconnect.h"
 
 #ifdef USERHOOK_INIT
 void Copter::userhook_init()
 {
-    // put your initialisation code here
-    // this will be called once at start-up
+    BPLab_Pi_Interconnect* pi = new BPLab_Pi_Interconnect();
+    pi->init();
 }
 #endif
 
@@ -39,7 +40,7 @@ void Copter::userhook_SlowLoop()
 #ifdef USERHOOK_SUPERSLOWLOOP
 void Copter::userhook_SuperSlowLoop()
 {
-    // put your 1Hz code here
+    gcs().send_text(MAV_SEVERITY_CRITICAL, "BPLab production!");
 }
 #endif
 
