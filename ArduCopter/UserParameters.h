@@ -12,5 +12,5 @@ public:
     AP_Int8 get_pi_address() const { return _pi_address; }
     
 private:
-    AP_PI_ADDRESS _pi_address;
+    AP_Int8 _pi_address;
 };

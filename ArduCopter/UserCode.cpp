@@ -1,11 +1,12 @@
 #include "Copter.h"
-#include "libraries\_bplab\BPLab_Pi_Interconnect.h"
+#include "BPLab_Pi_Interconnect.h"
+
+BPLab_Pi_Interconnect pi;
 
 #ifdef USERHOOK_INIT
 void Copter::userhook_init()
 {
-    BPLab_Pi_Interconnect* pi = new BPLab_Pi_Interconnect();
-    pi->init();
+    pi.init();
 }
 #endif
 
@@ -40,7 +41,7 @@ void Copter::userhook_SlowLoop()
 #ifdef USERHOOK_SUPERSLOWLOOP
 void Copter::userhook_SuperSlowLoop()
 {
-    gcs().send_text(MAV_SEVERITY_CRITICAL, "BPLab production!");
+    pi.send_heartbeat_message();
 }
 #endif
 
