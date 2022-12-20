@@ -3235,39 +3235,43 @@ void GCS_MAVLINK::handle_system_time_message(const mavlink_message_t &msg)
 #if AP_CAMERA_ENABLED
 MAV_RESULT GCS_MAVLINK::handle_command_camera(const mavlink_command_long_t &packet)
 {
-    AP_Camera *camera = AP::camera();
-    if (camera == nullptr) {
-        return MAV_RESULT_UNSUPPORTED;
-    }
+    
 
     MAV_RESULT result = MAV_RESULT_FAILED;
     switch (packet.command) {
-    case MAV_CMD_DO_DIGICAM_CONFIGURE:
+    case MAV_CMD_DO_DIGICAM_CONFIGURE: {
+        AP_Camera* camera = AP::camera();
+        if (camera == nullptr) {
+            return MAV_RESULT_UNSUPPORTED;
+        }
         camera->configure(packet.param1,
-                          packet.param2,
-                          packet.param3,
-                          packet.param4,
-                          packet.param5,
-                          packet.param6,
-                          packet.param7);
+            packet.param2,
+            packet.param3,
+            packet.param4,
+            packet.param5,
+            packet.param6,
+            packet.param7);
         result = MAV_RESULT_ACCEPTED;
         break;
-    case MAV_CMD_DO_DIGICAM_CONTROL:
-        camera->control(packet.param1,
-                        packet.param2,
-                        packet.param3,
-                        packet.param4,
-                        packet.param5,
-                        packet.param6);
+    }
+    case MAV_CMD_DO_DIGICAM_CONTROL: {
+        gcs().send_text(MAV_SEVERITY_INFO, "BpLab. MAV_CMD_DO_DIGICAM_CONTROL");
         result = MAV_RESULT_ACCEPTED;
         break;
+    }
     case MAV_CMD_DO_SET_CAM_TRIGG_DIST:
+    {
+        AP_Camera* camera = AP::camera();
+        if (camera == nullptr) {
+            return MAV_RESULT_UNSUPPORTED;
+        }
         camera->set_trigger_distance(packet.param1);
         if (is_equal(packet.param3, 1.0f)) {
             camera->take_picture();
         }
         result = MAV_RESULT_ACCEPTED;
         break;
+    }
     default:
         result = MAV_RESULT_UNSUPPORTED;
         break;
