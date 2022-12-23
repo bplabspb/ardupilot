@@ -6,6 +6,7 @@ BPLab_Pi_Interconnect pi;
 #ifdef USERHOOK_INIT
 void Copter::userhook_init()
 {
+    
 }
 #endif
 
@@ -41,7 +42,6 @@ void Copter::userhook_SlowLoop()
 void Copter::userhook_SuperSlowLoop()
 {
     pi.init(0x77);
-    pi.check_heartbeat();
 }
 #endif
 

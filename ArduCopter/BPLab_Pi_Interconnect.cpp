@@ -7,17 +7,16 @@ extern const AP_HAL::HAL& hal;
 
 void BPLab_Pi_Interconnect::init(int pi_address)
 {
-    if(_pi_found || _init_delay < 20) {
+    if(_pi_found)
+        return;
+    
+    if(_init_delay < 10) {
         _init_delay++;
         return;
     }
-    #if BPLAB_GCS_DEBUG
-    gcs().send_text(MAV_SEVERITY_INFO, "dbg init begin");
-    #endif
+   _init_delay = 0;
 
-    _init_delay = 0;
-
-    FOREACH_I2C(i) {
+   FOREACH_I2C(i) {
         AP_HAL::OwnPtr<AP_HAL::I2CDevice> dev = hal.i2c_mgr->get_device(i, pi_address);
         #if BPLAB_GCS_DEBUG
         gcs().send_text(MAV_SEVERITY_INFO, "dbg init probing bus %li", i);
@@ -36,9 +35,6 @@ void BPLab_Pi_Interconnect::init(int pi_address)
             dev->get_semaphore()->give();
             continue;
         }
-        #if BPLAB_GCS_DEBUG
-        gcs().send_text(MAV_SEVERITY_INFO, "dbg init sent hello");
-        #endif
 
         // wait for PI answer
         hal.scheduler->delay(20);
@@ -46,10 +42,8 @@ void BPLab_Pi_Interconnect::init(int pi_address)
         gcs().send_text(MAV_SEVERITY_INFO, "dbg init reading hello");
         #endif
         
-        const size_t expected_reply_len = 1;
-        uint8_t rx_bytes[expected_reply_len + 1];
-        memset(rx_bytes, 0, sizeof(rx_bytes));
-        if (!dev->transfer(nullptr, 0, rx_bytes, expected_reply_len)) {
+        memset(_read_buffer, 0, sizeof(_read_buffer));
+        if (!dev->transfer(nullptr, 0, _read_buffer, BPLAB_PI_MESSAGE_SIZE)) {
             #if BPLAB_GCS_DEBUG
             gcs().send_text(MAV_SEVERITY_INFO, "dbg init error read hello");
             #endif
@@ -59,81 +53,105 @@ void BPLab_Pi_Interconnect::init(int pi_address)
 
         dev->get_semaphore()->give();
         #if BPLAB_GCS_DEBUG
-        gcs().send_text(MAV_SEVERITY_INFO, "dbg init got hello answer: %u", (unsigned int)rx_bytes[0]);
+        gcs().send_text(MAV_SEVERITY_INFO, "dbg init got hello answer: %u", (unsigned int)_read_buffer[0]);
         #endif
 
-        if(rx_bytes[0]==BPLAB_PI_ANSWER_OK) {
-            _pi_found = true;
-            _dev = dev;
+        if(_read_buffer[0] == BPLAB_PI_CMD_HELLO_OK) {
+            _dev = std::move(dev);
+            //10Hz
+            _dev->register_periodic_callback(100000, FUNCTOR_BIND_MEMBER(&BPLab_Pi_Interconnect::timer, void));
             gcs().send_text(MAV_SEVERITY_INFO, "dbg init finished, pi found at %i on bus %li", pi_address, i);
+            _pi_found = true;
             return;
-        }
-    }
-   
-}
-
-void BPLab_Pi_Interconnect::check_heartbeat(void)
-{
-    if(!_pi_found)
-        return;
-    if(_hbt_delay < 30) {
-        _hbt_delay++;
-        return;
-    }
-    _hbt_delay = 0;
-
-    switch(send_and_wait_simple_cmd(BPLAB_PI_CMD_HBT)) {
-        case BPLAB_PI_ANSWER_FATAL:
-            gcs().send_text(MAV_SEVERITY_ERROR, "BPLab pi i2c error");
-            break;
-            case BPLAB_PI_ANSWER_OK:
-            gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi heartbeat ok");
-            break;
-            default:
-            gcs().send_text(MAV_SEVERITY_ERROR, "BPLab pi heartbeat lost");
-            break;
+        }    
     }
 }
 
-void BPLab_Pi_Interconnect::send_status_to_gcs(void)
+void BPLab_Pi_Interconnect::stop_recognition(void)
 {
-    if(!_pi_found)
+    _need_to_send_stop_recognition = true;
+}
+
+void BPLab_Pi_Interconnect::start_recognition(void)
+{
+    _need_to_send_start_recognition = true;
+}
+
+void BPLab_Pi_Interconnect::timer(void)
+{
+    // get data from pi 10 times a second
+    if(!read_without_lock()) {
+        return;
+    }
+    #if BPLAB_GCS_DEBUG
+    gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got pi answer = %u", (unsigned int)_read_buffer[0]);
+    #endif
+    
+    switch (_read_buffer[0])
     {
-        gcs().send_text(MAV_SEVERITY_ERROR, "BPLab pi not found");
+        case BPLAB_PI_CMD_START_RECOGNITION_OK:
+            gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got start recognition ok");
+            break;
+        case BPLAB_PI_CMD_START_RECOGNITION_NOK:
+            gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got start recognition error");
+            break;
+        case BPLAB_PI_CMD_STOP_RECOGNITION_OK:
+            gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got stop recognition ok");
+            break;
+        case BPLAB_PI_CMD_STOP_RECOGNITION_NOK:
+            gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got stop recognition error");
+            break;
+        case BPLAB_PI_CMD_NOTHING:
+            break;
+        case BPLAB_PI_CMD_HBT_OK:
+            gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got heartbeat");
+            break;
     }
-    else gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi found");
-    //g2.user_parameters.get_pi_address());
+
+    // check if we need to send any command
+    
+    if(_need_to_send_stop_recognition){
+        _need_to_send_stop_recognition = false;
+        send_simple_cmd_without_lock(BPLAB_PI_CMD_STOP_RECOGNITION);
+        gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi stop recognition send");
+        return;
+    }
+
+    if(_need_to_send_start_recognition){
+        _need_to_send_start_recognition = false;
+        send_simple_cmd_without_lock(BPLAB_PI_CMD_START_RECOGNITION);
+        gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi start recognition send");
+        return;
+    }
+
+    if(_hbt_delay >= 100) {
+        _hbt_delay = 0;
+        send_simple_cmd_without_lock(BPLAB_PI_CMD_HBT);
+        gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi heartbeat send");
+    }
+    else _hbt_delay++;    
 }
 
-int BPLab_Pi_Interconnect::send_and_wait_simple_cmd(int cmd)
+bool BPLab_Pi_Interconnect::send_simple_cmd_without_lock(int cmd)
 {
-        _dev->get_semaphore()->take_blocking();
-
-        const uint8_t send[1] = {(uint8_t)cmd};
-        if (!_dev->transfer(send, sizeof(send), nullptr, 0)) {
-            #if BPLAB_GCS_DEBUG
-            gcs().send_text(MAV_SEVERITY_INFO, "dbg send_and_wait_simple_cmd error send %i", cmd);
-            #endif
-            _dev->get_semaphore()->give();
-            return BPLAB_PI_ANSWER_FATAL;
-        }
-        // wait for PI answer
-        hal.scheduler->delay(20);
-        
-        uint8_t rx_bytes[2];
-        memset(rx_bytes, 0, sizeof(rx_bytes));
-        if (!_dev->transfer(nullptr, 0, rx_bytes, 1)) {
-            #if BPLAB_GCS_DEBUG
-            gcs().send_text(MAV_SEVERITY_INFO, "dbg end_and_wait_simple_cmd error read answer");
-            #endif
-            _dev->get_semaphore()->give();
-            return BPLAB_PI_ANSWER_FATAL;
-        }
-
-        _dev->get_semaphore()->give();
+    const uint8_t send[1] = {(uint8_t)cmd};
+    if (!_dev->transfer(send, sizeof(send), nullptr, 0)) {
         #if BPLAB_GCS_DEBUG
-        gcs().send_text(MAV_SEVERITY_INFO, "dbg end_and_wait_simple_cmd error got answer: %u", (unsigned int)rx_bytes[0]);
+        gcs().send_text(MAV_SEVERITY_ERROR, "dbg send_simple_cmd_without_lock error send %i", cmd);
         #endif
+        return false;
+    }
+    return true;
+}
 
-        return rx_bytes[0];
+bool BPLab_Pi_Interconnect::read_without_lock()
+{
+    memset(_read_buffer, 0, sizeof(_read_buffer));
+    if (!_dev->transfer(nullptr, 0, _read_buffer, BPLAB_PI_MESSAGE_SIZE)) {
+        #if BPLAB_GCS_DEBUG
+        gcs().send_text(MAV_SEVERITY_INFO, "dbg init error read hello");
+        #endif
+        return false;
+    }
+    return true;
 }
