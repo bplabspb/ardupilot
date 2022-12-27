@@ -2,6 +2,8 @@
     "cSpell.language": "en-GB",
     "astyle.astylerc": "${workspaceFolder}/Tools/CodeStyle/astylerc",
     "files.associations": {
-        "type_traits": "cpp"
+        "type_traits": "cpp",
+        "cstddef": "cpp",
+        "utility": "cpp"
     }
 }

@@ -61,6 +61,8 @@
 #include "MissionItemProtocol_Rally.h"
 #include "MissionItemProtocol_Fence.h"
 
+#include "../../ArduCopter/BPLab_Pi_Interconnect.h"
+
 #include <stdio.h>
 
 #if HAL_RCINPUT_WITH_AP_RADIO
@@ -3256,7 +3258,9 @@ MAV_RESULT GCS_MAVLINK::handle_command_camera(const mavlink_command_long_t &pack
     }
     case MAV_CMD_DO_DIGICAM_CONTROL: {
         gcs().send_text(MAV_SEVERITY_INFO, "BpLab. MAV_CMD_DO_DIGICAM_CONTROL");
-        result = MAV_RESULT_ACCEPTED;
+        if(BPLab_Pi_Interconnect::getInstance().start_recognition())
+            result = MAV_RESULT_ACCEPTED;
+        else result = MAV_RESULT_FAILED; 
         break;
     }
     case MAV_CMD_DO_SET_CAM_TRIGG_DIST:

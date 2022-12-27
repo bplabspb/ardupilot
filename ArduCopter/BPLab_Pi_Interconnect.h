@@ -24,8 +24,8 @@ class BPLab_Pi_Interconnect
 {
     public:
         void init(int pi_address);
-        void start_recognition(void);
-        void stop_recognition(void);
+        bool start_recognition(void);
+        bool stop_recognition(void);
     private:
         bool _pi_found;
         int _init_delay;
@@ -37,4 +37,16 @@ class BPLab_Pi_Interconnect
         uint8_t _read_buffer[BPLAB_PI_MESSAGE_SIZE + 1];
         bool _need_to_send_start_recognition;
         bool _need_to_send_stop_recognition;
+        
+    // singleton
+    public:
+        static BPLab_Pi_Interconnect& getInstance()
+        {
+            static BPLab_Pi_Interconnect instance;
+            return instance;
+        }
+        BPLab_Pi_Interconnect(BPLab_Pi_Interconnect const&) = delete;
+        void operator=(BPLab_Pi_Interconnect const&) = delete;
+    private:
+        BPLab_Pi_Interconnect() {}
 };

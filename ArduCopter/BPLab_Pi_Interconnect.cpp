@@ -67,14 +67,20 @@ void BPLab_Pi_Interconnect::init(int pi_address)
     }
 }
 
-void BPLab_Pi_Interconnect::stop_recognition(void)
+bool BPLab_Pi_Interconnect::stop_recognition(void)
 {
+    if(!_pi_found)
+        return false;
     _need_to_send_stop_recognition = true;
+    return true;
 }
 
-void BPLab_Pi_Interconnect::start_recognition(void)
+bool BPLab_Pi_Interconnect::start_recognition(void)
 {
+    if(!_pi_found)
+        return false;
     _need_to_send_start_recognition = true;
+    return true;
 }
 
 void BPLab_Pi_Interconnect::timer(void)
@@ -83,9 +89,6 @@ void BPLab_Pi_Interconnect::timer(void)
     if(!read_without_lock()) {
         return;
     }
-    #if BPLAB_GCS_DEBUG
-    gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got pi answer = %u", (unsigned int)_read_buffer[0]);
-    #endif
     
     switch (_read_buffer[0])
     {
@@ -101,10 +104,10 @@ void BPLab_Pi_Interconnect::timer(void)
         case BPLAB_PI_CMD_STOP_RECOGNITION_NOK:
             gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got stop recognition error");
             break;
-        case BPLAB_PI_CMD_NOTHING:
-            break;
         case BPLAB_PI_CMD_HBT_OK:
             gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi got heartbeat");
+            break;
+        case BPLAB_PI_CMD_NOTHING:
             break;
     }
 
@@ -124,7 +127,7 @@ void BPLab_Pi_Interconnect::timer(void)
         return;
     }
 
-    if(_hbt_delay >= 100) {
+    if(_hbt_delay >= 600) {
         _hbt_delay = 0;
         send_simple_cmd_without_lock(BPLAB_PI_CMD_HBT);
         gcs().send_text(MAV_SEVERITY_INFO, "BPLab pi heartbeat send");

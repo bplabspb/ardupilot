@@ -1,8 +1,6 @@
 #include "Copter.h"
 #include "BPLab_Pi_Interconnect.h"
 
-BPLab_Pi_Interconnect pi;
-
 #ifdef USERHOOK_INIT
 void Copter::userhook_init()
 {
@@ -41,7 +39,7 @@ void Copter::userhook_SlowLoop()
 #ifdef USERHOOK_SUPERSLOWLOOP
 void Copter::userhook_SuperSlowLoop()
 {
-    pi.init(0x77);
+    BPLab_Pi_Interconnect::getInstance().init(0x77);
 }
 #endif
 
